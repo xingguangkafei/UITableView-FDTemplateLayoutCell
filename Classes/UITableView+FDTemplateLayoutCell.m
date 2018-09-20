@@ -38,8 +38,8 @@
     // UITableViewIndex
     CGFloat rightSystemViewsWidth = 0.0;
     for (UIView *view in self.subviews) {
-        NSLog(@"[view class]: %@",[view class]);
         /*
+         NSLog(@"[view class]: %@",[view class]);
          2018-09-20 17:43:41.989039+0800 Demo[2432:80324] [view class]: UIRefreshControl
          2018-09-20 17:43:41.989134+0800 Demo[2432:80324] [view class]: UIView
          2018-09-20 17:43:41.989234+0800 Demo[2432:80324] [view class]: UIView
@@ -96,16 +96,27 @@
      */
     CGFloat fittingHeight = 0;
     
-    // 如果使用layout布局方式，并且，UITableView这个时候的宽度大于 0（这个什么 ？）
+    // 如果使用layout布局方式，并且，(UITableView这个时候的宽度大于 0（这个什么 ？）)
     if (!cell.fd_enforceFrameLayout && contentViewWidth > 0) {
         // Add a hard width constraint to make dynamic content views (like labels) expand vertically instead
         // of growing horizontally, in a flow-layout manner.
         /*
+          Create constraints explicitly.  Constraints are of the form "view1.attr1 = view2.attr2 * multiplier + constant"
+         If your equation does not have a second view and attribute, use nil and NSLayoutAttributeNotAnAttribute.
          
+         NSLayoutConstraint 这个类
+         明确的创建一个约束条件。
+         约束条件是这样的一个格式： view1的属性 = view2的属性 乘以 倍数 + 常量
+         如果你没有第二个View和属性，那么久传递nil和NSLayoutAttributeNotAnAttribute，这两个参数
+         Fence: 栅栏；围墙；
          */
+        // 宽度栅栏约束 设置cell的内容View的宽度为 UITableView除去
         NSLayoutConstraint *widthFenceConstraint = [NSLayoutConstraint constraintWithItem:cell.contentView attribute:NSLayoutAttributeWidth relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1.0 constant:contentViewWidth];
 
         // [bug fix] after iOS 10.3, Auto Layout engine will add an additional 0 width constraint onto cell's content view, to avoid that, we add constraints to content view's left, right, top and bottom.
+        // 修复bug，ios10.3 之后，自动布局引擎会添加一个 额外的为0的的约束到 cell的内容View
+        // 为了避免那样，我们添加约束到cell的内容View的：左右上下
+        // 这个值的赋值方式，实在是值得学习
         static BOOL isSystemVersionEqualOrGreaterThen10_2 = NO;
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^{
@@ -116,34 +127,54 @@
         if (isSystemVersionEqualOrGreaterThen10_2) {
             // To avoid confilicts, make width constraint softer than required (1000)
             widthFenceConstraint.priority = UILayoutPriorityRequired - 1;
+            /*
+             宽度栅栏约束的优先级只比最高优先级低 1
+             UILayoutPriorityRequired： A required constraint.  Do not exceed this.
+             UILayoutPriorityRequired：一个必须的约束，不要超过这个数值
+             exceed：超过；胜过
+             */
             
-            // Build edge constraints
+            // Build edge constraints: 创建边缘约束
+            // 左边约束：cell的内容View 的左边 挨着 cell的左边
             NSLayoutConstraint *leftConstraint = [NSLayoutConstraint constraintWithItem:cell.contentView attribute:NSLayoutAttributeLeft relatedBy:NSLayoutRelationEqual toItem:cell attribute:NSLayoutAttributeLeft multiplier:1.0 constant:0];
+            // 右边约束：cell的内容View 的右边 挨着 (cell的右边 - 右边要系统要占用的View的宽度)
             NSLayoutConstraint *rightConstraint = [NSLayoutConstraint constraintWithItem:cell.contentView attribute:NSLayoutAttributeRight relatedBy:NSLayoutRelationEqual toItem:cell attribute:NSLayoutAttributeRight multiplier:1.0 constant:-rightSystemViewsWidth];
+            // 顶部约束：cell的内容View 的顶部 挨着cell的顶部
             NSLayoutConstraint *topConstraint = [NSLayoutConstraint constraintWithItem:cell.contentView attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:cell attribute:NSLayoutAttributeTop multiplier:1.0 constant:0];
+            // 底部约束：cell内容View 的底部 挨着cell的底部
             NSLayoutConstraint *bottomConstraint = [NSLayoutConstraint constraintWithItem:cell.contentView attribute:NSLayoutAttributeBottom relatedBy:NSLayoutRelationEqual toItem:cell attribute:NSLayoutAttributeBottom multiplier:1.0 constant:0];
             edgeConstraints = @[leftConstraint, rightConstraint, topConstraint, bottomConstraint];
+            // 把这几个约束添加到cell上
             [cell addConstraints:edgeConstraints];
         }
         
         [cell.contentView addConstraint:widthFenceConstraint];
 
         // Auto layout engine does its math
+        // 自动布局引擎 根据cell布局计算cell高度
         fittingHeight = [cell.contentView systemLayoutSizeFittingSize:UILayoutFittingCompressedSize].height;
         
         // Clean-ups
+        // 移除view的内容View上的所有约束
         [cell.contentView removeConstraint:widthFenceConstraint];
         if (isSystemVersionEqualOrGreaterThen10_2) {
             [cell removeConstraints:edgeConstraints];
         }
-        
+        // 以上约束添加后又移除了，难道是因为cell不显示出来，然后就...
+        // 打印系统的自动布局计算出来cell高度
         [self fd_debugLog:[NSString stringWithFormat:@"calculate using system fitting size (AutoLayout) - %@", @(fittingHeight)]];
     }
-    
+    // 如果自动布局算出来的高度为0的话
     if (fittingHeight == 0) {
 #if DEBUG
         // Warn if using AutoLayout but get zero height.
         if (cell.contentView.constraints.count > 0) {
+            // 如果到这里，就说明cell里的布局有问题
+            /*
+             这里的 objc_getAssociatedObject 用法也挺妙的，因为 _cmd 代表一个selector
+             objc_getAssociatedObject(self, _cmd) 这一句相当于拿这个 seletor 做了一个分类的动态添加属性
+             这里 https://www.jianshu.com/p/fdb1bc445266
+             */
             if (!objc_getAssociatedObject(self, _cmd)) {
                 NSLog(@"[FDTemplateLayoutCell] Warning once only: Cannot get a proper cell height (now 0) from '- systemFittingSize:'(AutoLayout). You should check how constraints are built in cell, making it into 'self-sizing' cell.");
                 objc_setAssociatedObject(self, _cmd, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -152,6 +183,7 @@
 #endif
         // Try '- sizeThatFits:' for frame layout.
         // Note: fitting height should not include separator view.
+        // 用sizeThatFits 方法计算cell高度。关于sizeThatFits 看这里 https://www.jianshu.com/p/bdd644b797c3
         fittingHeight = [cell sizeThatFits:CGSizeMake(contentViewWidth, 0)].height;
         
         [self fd_debugLog:[NSString stringWithFormat:@"calculate using sizeThatFits - %@", @(fittingHeight)]];
@@ -164,10 +196,11 @@
     }
     
     // Add 1px extra space for separator line if needed, simulating default UITableViewCell.
+    // 如果有cell的横线，那么高度就加一个像素的高度，模仿默认的UITableViewCell
     if (self.separatorStyle != UITableViewCellSeparatorStyleNone) {
         fittingHeight += 1.0 / [UIScreen mainScreen].scale;
     }
-    
+    // 到此计算出了cell的高度
     return fittingHeight;
 }
 // 用cellid 获取一个cell
@@ -207,7 +240,7 @@
     [templateLayoutCell prepareForReuse];
     
     // Customize and provide content for our template cell.
-    // 调用自定义的一些代码，比如我自己写好的cell上的model赋值，cell的是否用布局cell布局
+    // 调用自定义的一些代码，比如我自己写好的cell上的model赋值，cell是否用 布局cell 来布局
     if (configuration) {
         configuration(templateLayoutCell);
     }

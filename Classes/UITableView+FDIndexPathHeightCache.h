@@ -25,6 +25,7 @@
 @interface FDIndexPathHeightCache : NSObject
 
 // Enable automatically if you're using index path driven height cache
+// 自动失效 高度缓存
 @property (nonatomic, assign) BOOL automaticallyInvalidateEnabled;
 
 // Height cache

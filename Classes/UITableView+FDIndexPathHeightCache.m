@@ -44,7 +44,7 @@ typedef NSMutableArray<NSMutableArray<NSNumber *> *> FDIndexPathHeightsBySection
 - (FDIndexPathHeightsBySection *)heightsBySectionForCurrentOrientation {
     return UIDeviceOrientationIsPortrait([UIDevice currentDevice].orientation) ? self.heightsBySectionForPortrait: self.heightsBySectionForLandscape;
 }
-
+// 这个block写的好啊，真特么实用
 - (void)enumerateAllOrientationsUsingBlock:(void (^)(FDIndexPathHeightsBySection *heightsBySection))block {
     block(self.heightsBySectionForPortrait);
     block(self.heightsBySectionForLandscape);
@@ -94,6 +94,20 @@ typedef NSMutableArray<NSMutableArray<NSNumber *> *> FDIndexPathHeightsBySection
 }
 
 - (void)buildSectionsIfNeeded:(NSInteger)targetSection {
+    /*
+     1，传递过来一个竖屏的高度缓存数组
+     2，如果targetSession大于 竖屏数组的个数，那么就再给这个targetSection创建一个数组,然后添加到 高度缓存数组里面
+     NSMutableArray * mArr = [NSMutableArray array];
+     mArr[0] = @"0";
+     mArr[1] = @"1";
+     NSLog(@"%@",mArr);
+     上面几句代码竟然是正确的...开了眼啊今天
+     
+     3，传递过来一个 横屏的高度缓存数组
+     4，重复2
+     
+     至此, 横竖屏的高度缓存数组里，都是数组，数组元素这样的：第0个是session为0的时候的一个数组...依次类推
+     */
     [self enumerateAllOrientationsUsingBlock:^(FDIndexPathHeightsBySection *heightsBySection) {
         for (NSInteger section = 0; section <= targetSection; ++section) {
             if (section >= heightsBySection.count) {
@@ -104,6 +118,15 @@ typedef NSMutableArray<NSMutableArray<NSNumber *> *> FDIndexPathHeightsBySection
 }
 
 - (void)buildRowsIfNeeded:(NSInteger)targetRow inExistSection:(NSInteger)section {
+    /*
+     1，传递过来一个竖屏的高度缓存数组（都是NSMutableArray元素）
+     2, 找到session对应那个session数组(都是NSNumber元素)
+     3，遍历这个targetRow大小，给这个session数组一个个添加元素
+     
+     4，传递过来一个横屏的高度缓存数组（都是NSMutableArray元素）
+     重复 2 3
+     */
+    
     [self enumerateAllOrientationsUsingBlock:^(FDIndexPathHeightsBySection *heightsBySection) {
         NSMutableArray<NSNumber *> *heightsByRow = heightsBySection[section];
         for (NSInteger row = 0; row <= targetRow; ++row) {
@@ -132,6 +155,10 @@ typedef NSMutableArray<NSMutableArray<NSNumber *> *> FDIndexPathHeightsBySection
 // We just forward primary call, in crash report, top most method in stack maybe FD's,
 // but it's really not our bug, you should check whether your table view's data source and
 // displaying cells are not matched when reloading.
+/*
+ 我们只是转发初级调用，在crash报告中，最多的出错都是我们这个库的
+ 但是真不是我们的bug，你应该检查，你的tableView正在滚动的时候，tableView的数据源和正在展示的cell是否匹配
+ */
 static void __FD_TEMPLATE_LAYOUT_CELL_PRIMARY_CALL_IF_CRASH_NOT_OUR_BUG__(void (^callout)(void)) {
     callout();
 }
@@ -142,7 +169,13 @@ static void __FD_TEMPLATE_LAYOUT_CELL_PRIMARY_CALL_IF_CRASH_NOT_OUR_BUG__(void (
 - (void)fd_reloadDataWithoutInvalidateIndexPathHeightCache {
     FDPrimaryCall([self fd_reloadData];);
 }
-
+/*
+ 一个类的 +load 方法会在它所有的父类的 +load 方法后调用。
+ 一个分类的 +load 方法会在类本身的 +load 方法之后调用。
+ +load 方法不遵循继承规则， 如果某个类本身没有实现 +load 方法，不管其父类有无实现 +load 方法，系统都不会调用。
+ +load 方法务必实现得精简些，尽量减少其所需要执行的操作，整个程序可能因为 +load 方法而堵塞。
+ +load 方法真正的用途是在调试程序
+ */
 + (void)load {
     // All methods that trigger height cache's invalidation
     SEL selectors[] = {
