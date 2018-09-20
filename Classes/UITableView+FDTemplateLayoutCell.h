@@ -95,6 +95,10 @@
 ///           [self notifySomething]; // non-UI side effects
 ///       }
 ///   }
+/*
+ 用来标明 是一个仅仅用来计算高度的 布局cell
+ 可能仅仅 ？？？
+ */
 ///
 @property (nonatomic, assign) BOOL fd_isTemplateLayoutCell;
 
@@ -102,6 +106,13 @@
 /// and will ask cell's height by calling "-sizeThatFits:", so you must override this method.
 /// Use this property only when you want to manually control this template layout cell's height
 /// calculation mode, default to NO.
+/*
+ 是否开启 强制 布局cell，用 frame layout 而不是用 auto layout
+ 会调用cell的sizeThatFits方法，来获取cell的高度，所以一定要重写这个方法
+ 仅当你想要手动控制这个 布局cell的高度计算方案
+ 默认是NO
+ */
+
 ///
 @property (nonatomic, assign) BOOL fd_enforceFrameLayout;
 

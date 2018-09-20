@@ -18,6 +18,7 @@ typedef NS_ENUM(NSInteger, FDSimulatedCacheMode) {
 };
 
 @interface FDFeedViewController () <UIActionSheetDelegate>
+// 这里数组用的copy
 @property (nonatomic, copy) NSArray *prototypeEntitiesFromJSON;
 @property (nonatomic, strong) NSMutableArray *feedEntitySections; // 2d array
 @property (nonatomic, weak) IBOutlet UISegmentedControl *cacheModeSegmentControl;
@@ -33,6 +34,7 @@ typedef NS_ENUM(NSInteger, FDSimulatedCacheMode) {
     // Cache by index path initial
     self.cacheModeSegmentControl.selectedSegmentIndex = 1;
     
+    // 这里这个block 强引用了 self ， 但是self 并没有强引用bolck，所以不会内存泄漏
     [self buildTestDataThen:^{
         self.feedEntitySections = @[].mutableCopy;
         [self.feedEntitySections addObject:self.prototypeEntitiesFromJSON.mutableCopy];
@@ -60,6 +62,13 @@ typedef NS_ENUM(NSInteger, FDSimulatedCacheMode) {
         // Callback
         dispatch_async(dispatch_get_main_queue(), ^{
             !then ?: then();
+            /*
+             the expression
+             x ? : y
+             has the value of x if that is nonzero; otherwise, the value of y.
+             This example is perfectly equivalent to
+             x ? x : y
+             */
         });
     });
 }
@@ -76,17 +85,20 @@ typedef NS_ENUM(NSInteger, FDSimulatedCacheMode) {
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     FDFeedCell *cell = [tableView dequeueReusableCellWithIdentifier:@"FDFeedCell"];
+    // 掉获取cell的方法
     [self configureCell:cell atIndexPath:indexPath];
     return cell;
 }
 
 - (void)configureCell:(FDFeedCell *)cell atIndexPath:(NSIndexPath *)indexPath {
+    // 设置为NO, 让cell使用layout布局
     cell.fd_enforceFrameLayout = NO; // Enable to use "-sizeThatFits:"
-    if (indexPath.row % 2 == 0) {
+    if (indexPath.row % 2 == 0) { // 改变cell的中间右边的系统UI图片
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else {
         cell.accessoryType = UITableViewCellAccessoryCheckmark;
     }
+    // 获取cell的数据
     cell.entity = self.feedEntitySections[indexPath.section][indexPath.row];
 }
 
@@ -99,7 +111,7 @@ typedef NS_ENUM(NSInteger, FDSimulatedCacheMode) {
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     FDSimulatedCacheMode mode = self.cacheModeSegmentControl.selectedSegmentIndex;
     switch (mode) {
-        case FDSimulatedCacheModeNone:
+        case FDSimulatedCacheModeNone: // 不做缓存的时候
             return [tableView fd_heightForCellWithIdentifier:@"FDFeedCell" configuration:^(FDFeedCell *cell) {
                 [self configureCell:cell atIndexPath:indexPath];
             }];

@@ -25,26 +25,41 @@
 
 @implementation UITableView (FDTemplateLayoutCell)
 
+/*
+ 参数：是仅仅用来计算的 cell高度的 布局cell
+ */
 - (CGFloat)fd_systemFittingHeightForConfiguratedCell:(UITableViewCell *)cell {
+    // 获取 布局cell 所在的UITableView的宽度
     CGFloat contentViewWidth = CGRectGetWidth(self.frame);
-    
+    // 设置 布局cell 的宽度为UITableView的宽度
     CGRect cellBounds = cell.bounds;
     cellBounds.size.width = contentViewWidth;
     cell.bounds = cellBounds;
-    
+    // UITableViewIndex
     CGFloat rightSystemViewsWidth = 0.0;
     for (UIView *view in self.subviews) {
+        NSLog(@"[view class]: %@",[view class]);
+        /*
+         2018-09-20 17:43:41.989039+0800 Demo[2432:80324] [view class]: UIRefreshControl
+         2018-09-20 17:43:41.989134+0800 Demo[2432:80324] [view class]: UIView
+         2018-09-20 17:43:41.989234+0800 Demo[2432:80324] [view class]: UIView
+         2018-09-20 17:43:41.989314+0800 Demo[2432:80324] [view class]: UITableViewIndex
+         */
         if ([view isKindOfClass:NSClassFromString(@"UITableViewIndex")]) {
+            // view.backgroundColor = [UIColor redColor];
+            // 这个View是右侧的View，例如微信的通讯录页面的右侧的字母列表的底部的一个长条View
+            // 获取这个View的宽度
             rightSystemViewsWidth = CGRectGetWidth(view.frame);
             break;
         }
     }
-    
+    // accessory View 可以参考这里 https://www.jianshu.com/p/c6e73527f987
     // If a cell has accessory view or system accessory type, its content view's width is smaller
     // than cell's by some fixed values.
-    if (cell.accessoryView) {
+    if (cell.accessoryView) { // 如果有系统 accesory view 的话 就 再加个额外宽度16
         rightSystemViewsWidth += 16 + CGRectGetWidth(cell.accessoryView.frame);
-    } else {
+    } else { // 如果没有  accesory view 
+        // 用一个 静态 枚举常量数组，这个写法，还真没见过
         static const CGFloat systemAccessoryWidths[] = {
             [UITableViewCellAccessoryNone] = 0,
             [UITableViewCellAccessoryDisclosureIndicator] = 34,
@@ -54,11 +69,12 @@
         };
         rightSystemViewsWidth += systemAccessoryWidths[cell.accessoryType];
     }
-    
+    // 关于 scale 看这里 https://www.jianshu.com/p/878e61c2d047
+    // 如果分辨率 >= 3 切 宽大于414 (也就是6p以及以上屏幕大小)
     if ([UIScreen mainScreen].scale >= 3 && [UIScreen mainScreen].bounds.size.width >= 414) {
-        rightSystemViewsWidth += 4;
+        rightSystemViewsWidth += 4; // 研究的真是精细
     }
-    
+    // 内容宽度为 UITableView的宽度减去 右边需要余下的宽度
     contentViewWidth -= rightSystemViewsWidth;
 
     
@@ -69,12 +85,24 @@
     // 2. Warning once if step 1 still returns 0 when using AutoLayout
     // 3. Try "- sizeThatFits:" if step 1 returns 0
     // 4. Use a valid height or default row height (44) if not exist one
-    
+    /*
+     如果不用 auto layout, 那么你就一定要重写 -sizeThatFits: 方法 来计算合适的大小
+     这个计算结果和 iOS8的 self-sizing 一样
+     
+     1，先调用 - systemLayoutSizeFittingSize:（如果fd_enforceFrameLayout为YES的话，这一步跳过）
+     2，如果第一步调用了还是返回0，那么就给一次警告
+     3，如果第一步返回0，那么就尝试一下 - sizeThatFits: 方法
+     4，如果还是搞不定，那么就用一个固定值代替
+     */
     CGFloat fittingHeight = 0;
     
+    // 如果使用layout布局方式，并且，UITableView这个时候的宽度大于 0（这个什么 ？）
     if (!cell.fd_enforceFrameLayout && contentViewWidth > 0) {
         // Add a hard width constraint to make dynamic content views (like labels) expand vertically instead
         // of growing horizontally, in a flow-layout manner.
+        /*
+         
+         */
         NSLayoutConstraint *widthFenceConstraint = [NSLayoutConstraint constraintWithItem:cell.contentView attribute:NSLayoutAttributeWidth relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1.0 constant:contentViewWidth];
 
         // [bug fix] after iOS 10.3, Auto Layout engine will add an additional 0 width constraint onto cell's content view, to avoid that, we add constraints to content view's left, right, top and bottom.
@@ -142,45 +170,50 @@
     
     return fittingHeight;
 }
-
+// 用cellid 获取一个cell
 - (__kindof UITableViewCell *)fd_templateCellForReuseIdentifier:(NSString *)identifier {
     NSAssert(identifier.length > 0, @"Expect a valid identifier - %@", identifier);
-    
+    // cell用一个tableView的字典存储，key是cellid字符串，value是cell
     NSMutableDictionary<NSString *, UITableViewCell *> *templateCellsByIdentifiers = objc_getAssociatedObject(self, _cmd);
     if (!templateCellsByIdentifiers) {
         templateCellsByIdentifiers = @{}.mutableCopy;
         objc_setAssociatedObject(self, _cmd, templateCellsByIdentifiers, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    
+    // 从字典取出cell
     UITableViewCell *templateCell = templateCellsByIdentifiers[identifier];
     
-    if (!templateCell) {
-        templateCell = [self dequeueReusableCellWithIdentifier:identifier];
+    if (!templateCell) { // 如果没有
+        templateCell = [self dequeueReusableCellWithIdentifier:identifier]; // 如果没有，那么就从系统缓存池里取
         NSAssert(templateCell != nil, @"Cell must be registered to table view for identifier - %@", identifier);
-        templateCell.fd_isTemplateLayoutCell = YES;
-        templateCell.contentView.translatesAutoresizingMaskIntoConstraints = NO;
-        templateCellsByIdentifiers[identifier] = templateCell;
-        [self fd_debugLog:[NSString stringWithFormat:@"layout cell created - %@", identifier]];
+        templateCell.fd_isTemplateLayoutCell = YES; // 标明这是一个仅仅用来计算 布局cell 的 cell
+        templateCell.contentView.translatesAutoresizingMaskIntoConstraints = NO; // 关闭cell的contentView的自动布局
+        templateCellsByIdentifiers[identifier] = templateCell; // 把cell保存到字典里
+        [self fd_debugLog:[NSString stringWithFormat:@"layout cell created - %@", identifier]]; // 打印这个计算 布局cell的 cellid
     }
     
     return templateCell;
 }
-
+// 用cellid标识符，获取cell的高度，传进来一个block
 - (CGFloat)fd_heightForCellWithIdentifier:(NSString *)identifier configuration:(void (^)(id cell))configuration {
     if (!identifier) {
         return 0;
     }
-    
+    // 获取一个仅仅用来计算的 cell高度的 布局cell
     UITableViewCell *templateLayoutCell = [self fd_templateCellForReuseIdentifier:identifier];
     
     // Manually calls to ensure consistent behavior with actual cells. (that are displayed on screen)
+    // 手动调用这个方法，可以确保显示到屏幕上的cell，真的计算过一次cell内容了
+    // 可以看这里 https://www.jianshu.com/p/e153ec626847
     [templateLayoutCell prepareForReuse];
     
     // Customize and provide content for our template cell.
+    // 调用自定义的一些代码，比如我自己写好的cell上的model赋值，cell的是否用布局cell布局
     if (configuration) {
         configuration(templateLayoutCell);
     }
-    
+    /*
+     参数：是仅仅用来计算的 cell高度的 布局cell
+     */
     return [self fd_systemFittingHeightForConfiguratedCell:templateLayoutCell];
 }
 
